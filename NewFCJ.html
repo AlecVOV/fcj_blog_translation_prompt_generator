@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Generator for AWS Blog Translation</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+    <style>
+        /* --- AWS Color Theme --- */
+        :root {
+            --aws-navy: #252F3E;
+            --aws-orange: #FF9900;
+            --aws-light-navy: #37475A;
+            --aws-lighter-navy: #495D7A;
+            --aws-orange-hover: #EC7211;
+            --aws-background: #EAEDED;
+            --aws-card-bg: #FFFFFF;
+        }
+
+        /* --- General Styling --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Amazon Ember', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--aws-background);
+            color: var(--aws-navy);
+        }
+
+        /* --- Loading Screen --- */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--aws-navy);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease-out;
+        }
+
+        .loading-screen.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-logo {
+            width: auto;
+            height: auto;
+            max-width: 520px;
+            margin-bottom: 30px;
+            animation: pulse 2s ease-in-out infinite;
+            object-fit: contain;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.05);
+                opacity: 0.8;
+            }
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 153, 0, 0.3);
+            border-top-color: var(--aws-orange);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: var(--aws-orange);
+            font-size: 18px;
+            margin-top: 20px;
+            font-weight: 500;
+        }
+
+        /* --- Header with Logo --- */
+        .header {
+            background: linear-gradient(135deg, var(--aws-navy) 0%, var(--aws-light-navy) 100%);
+            padding: 20px 40px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            animation: slideDown 0.6s ease-out forwards;
+            animation-delay: 0.3s;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .header-logo {
+            height: 70px;
+            width: auto;
+            max-width: 300px;
+            object-fit: contain;
+        }
+
+        .header-title {
+            flex: 1;
+        }
+
+        .header-title h1 {
+            color: white;
+            font-size: 28px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .header-title p {
+            color: var(--aws-orange);
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        /* --- Main Container --- */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            opacity: 0;
+            animation: fadeInUp 0.8s ease-out forwards;
+            animation-delay: 0.5s;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* --- Blog Text Area Layout --- */
+        .blogs-wrapper {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .blog-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--aws-card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(37, 47, 62, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .blog-section:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(37, 47, 62, 0.15);
+        }
+        
+        .blog-section h2 {
+            text-align: center;
+            font-weight: 600;
+            color: var(--aws-navy);
+            margin-bottom: 15px;
+            font-size: 22px;
+            border-bottom: 3px solid var(--aws-orange);
+            padding-bottom: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 500px;
+            border: 2px solid #D5DBDB;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 15px;
+            line-height: 1.6;
+            resize: vertical;
+            background-color: #FAFAFA;
+            color: var(--aws-navy);
+            font-family: 'Courier New', monospace;
+            transition: border-color 0.3s ease, background-color 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--aws-orange);
+            background-color: white;
+            box-shadow: 0 0 0 3px rgba(255, 153, 0, 0.1);
+        }
+
+        textarea::placeholder {
+            color: #AAB7B8;
+        }
+
+        /* --- Button Styling --- */
+        .button-container {
+            text-align: center;
+        }
+
+        .copy-button {
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, var(--aws-orange) 0%, var(--aws-orange-hover) 100%);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(255, 153, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .copy-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .copy-button:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .copy-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 153, 0, 0.4);
+        }
+
+        .copy-button:active {
+            transform: translateY(0);
+        }
+
+        .copy-button.copied {
+            background: linear-gradient(135deg, #16A34A 0%, #15803D 100%);
+        }
+
+        .button-text {
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* --- Responsive Design --- */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header-logo {
+                height: 50px;
+                max-width: 250px;
+            }
+
+            .header-title h1 {
+                font-size: 22px;
+            }
+
+            .blogs-wrapper {
+                flex-direction: column;
+            }
+
+            textarea {
+                height: 350px;
+            }
+
+            .container {
+                padding: 20px 15px;
+            }
+        }
+
+        /* --- Empty State --- */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #AAB7B8;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Loading Screen -->
+        <div class="loading-screen" :class="{ 'fade-out': !isLoading }">
+            <img src="LOGO AWS FACJ - NO BG - 5.png" alt="AWS Logo" class="loading-logo" v-if="logoExists">
+            <div v-else style="width: 300px; height: 150px; background: var(--aws-orange); border-radius: 12px; margin-bottom: 30px;"></div>
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading AWS Blog Translation Tool...</div>
+        </div>
+
+        <!-- Header with Logo -->
+        <header class="header">
+            <div class="header-content">
+                <img src="LOGO AWS FACJ - NO BG - 4.png" alt="AWS FCAJ Logo" class="header-logo" v-if="logoExists" @error="handleLogoError">
+                <div v-else style="width: 200px; height: 70px; background: var(--aws-orange); border-radius: 8px;"></div>
+                <div class="header-title">
+                    <h1>AWS Blog Translation Prompt Generator</h1>
+                    <p>Professional Technical Content Localization Tool</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Container -->
+        <div class="container">
+            <div class="blogs-wrapper">
+                <div class="blog-section">
+                    <h2>📄 Original Blog (English)</h2>
+                    <textarea 
+                        id="original-blog" 
+                        v-model="originalBlog"
+                        placeholder="Paste the original English blog content here..."
+                    ></textarea>
+                </div>
+                <div class="blog-section">
+                    <h2>🌐 Translated Blog (Vietnamese)</h2>
+                    <textarea 
+                        id="translated-blog" 
+                        v-model="translatedBlog"
+                        placeholder="Paste the Vietnamese translated blog content here..."
+                    ></textarea>
+                </div>
+            </div>
+            <div class="button-container">
+                <button 
+                    class="copy-button" 
+                    :class="{ 'copied': isCopied }"
+                    @click="copyPrompt"
+                    :disabled="!canGenerate"
+                >
+                    <span class="button-text">{{ buttonText }}</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    isLoading: true,
+                    logoExists: true,
+                    originalBlog: '',
+                    translatedBlog: '',
+                    isCopied: false,
+                    buttonText: 'Get the Prompt'
+                }
+            },
+            computed: {
+                canGenerate() {
+                    return this.originalBlog.trim() !== '' && this.translatedBlog.trim() !== '';
+                }
+            },
+            methods: {
+                handleLogoError() {
+                    this.logoExists = false;
+                },
+                copyPrompt() {
+                    if (!this.canGenerate) {
+                        alert('Please fill in both text areas before generating the prompt.');
+                        return;
+                    }
+
+                    const fullPrompt = `
+## ROLE & GOAL
+You are a Principal Technical Editor at AWS, a 20-year veteran in cloud architecture with deep expertise in localizing technical content. You are meticulous, exacting, and detail-oriented. Your primary mission is to proofread a provided Vietnamese translation against its English original, identifying all errors in technical accuracy, meaning, and style.
+
+## CONTEXT
+
+- **[Original English Article]**:
+${this.originalBlog}
+
+- **[Current Vietnamese Translation]**:
+${this.translatedBlog}
+
+## CORE DIRECTIVES
+
+1.  **Meaning and Accuracy**: Compare the translation against the original, paragraph by paragraph. Identify and correct any mistranslations, omissions, additions, or stiff, word-for-word phrasing. The final meaning must be technically precise.
+2.  **Audience and Tone**: The target audience is beginners in computer science. The tone should be educational, clear, and approachable, but maintain technical authority. Avoid overly casual slang.
+3.  **Content Integrity**:
+    * **Do Not Add Information**: Never introduce technical information that is not present in the original English text. You may add transitional words to improve flow.
+    * **Preserve a Título (Do Not Change)**: Keep the following elements exactly as they appear in the original:
+        * Code blocks, API/SDK/CLI names and commands.
+        * Parameters, JSON keys, shell commands, and log outputs.
+        * File paths, URLs, and AWS region codes (e.g., us-east-1).
+        * Numbers and units (e.g., 10 GiB, 200ms). Do not convert them.
+        * Links and their anchor text (if the anchor is not a descriptive sentence).
+
+## TERMINOLOGY RULES
+
+1.  **AWS Service Names**: **NEVER** translate AWS service names, product features, or branded terms. They must remain in English with correct capitalization (e.g., *Amazon S3, AWS Lambda, EC2, VPC, Availability Zone, IAM, CloudWatch Logs*).
+2.  **General Technical Terms**: Translate common technical terms for clarity, but provide the English original in parentheses upon their **first use** in the article. Be consistent with this translation throughout the text.
+    * *Example*: "endpoint" should be translated as "điểm cuối (endpoint)".
+    * *Example*: "fault tolerance" should be translated as "chịu lỗi (fault tolerance)".
+    * *Example*: "throughput" should be translated as "thông lượng (throughput)".
+    * *Example*: "latency" should be translated as "độ trễ (latency)".
+    * *Example*: "instance" should be kept in original language.
+    * *Example*: "on-premises" should be translated as "cơ sở hạ tầng công nghệ của cơ quan (on-premises)".
+    * *Example*: "high availability" should be translated as "khả dụng cao (high availability)".
+    * *Example*: "scalability" should be translated as "khả năng mở rộng (scalability)".
+    * *Example*: "load balancing" should be translated as "cân bằng tải trọng (load balancing)".
+    * *Example*: "auto scaling" should be translated as "tự động điều chỉnh quy mô (auto scaling)".
+3.  **Title/Header Check**: Scrutinize the article's title. It must accurately reflect the core topic, use correct terminology, be easy for beginners to understand, and avoid literal, awkward translations.
+
+## STEP-BY-STEP PROCESS
+
+1.  **Initial Scan**: Quickly review the translation to identify key terminology and locate all code blocks, JSON, and CLI commands to ensure they are not altered.
+2.  **Title Analysis**: Evaluate the title based on the "Title Check" directive.
+3.  **Paragraph-by-Paragraph Review**: Methodically compare each paragraph of the translation to the original. For each identified error, create a report entry using the format below.
+4.  **Final Report Generation**: Compile all findings into a single report as specified in the "OUTPUT FORMAT".
+
+## OUTPUT FORMAT
+
+Generate a markdown-formatted "Correction Report" listing every issue found in the order of its appearance. Use the following strict template for each entry:
+
+**A. Correction Report**
+
+* **Paragraph #[Paragraph Number], starts with: "..."**
+    * **Current Translation**: [Quote the problematic Vietnamese sentence or phrase]
+    * **Original English**: [Quote the corresponding English sentence or phrase]
+    * **Suggested Edit**: [Provide the corrected Vietnamese version]
+    * **Severity**: [Critical / Major / Minor]
+    * **Rationale**: [Briefly explain why the change is needed, referencing issues like: technical inaccuracy, mistranslation, unnatural phrasing, terminology rule violation, or formatting error.]
+
+---
+*(Example of a single entry)*
+
+* **Paragraph #3, starts with: "Để bắt đầu, bạn cần một cổng NAT..."**
+    * **Current Translation**: Để bắt đầu, bạn cần một cổng NAT trong mạng riêng ảo của mình.
+    * **Original English**: To get started, you will need a NAT Gateway in your VPC.
+    * **Suggested Edit**: Để bắt đầu, bạn sẽ cần một NAT Gateway trong VPC của mình.
+    * **Severity**: Major
+    * **Rationale**: Terminology rule violation. "VPC" is a branded AWS term and should not be translated as "mạng riêng ảo". "NAT Gateway" should also remain untranslated.
+`;
+
+                    navigator.clipboard.writeText(fullPrompt.trim()).then(() => {
+                        this.isCopied = true;
+                        this.buttonText = '✓ Copied to Clipboard!';
+                        
+                        setTimeout(() => {
+                            this.isCopied = false;
+                            this.buttonText = 'Get the Prompt';
+                        }, 2000);
+                    }).catch(err => {
+                        console.error('Failed to copy content: ', err);
+                        alert('An error occurred while copying the prompt!');
+                    });
+                }
+            },
+            mounted() {
+                // Simulate loading time
+                setTimeout(() => {
+                    this.isLoading = false;
+                }, 2000);
+            }
+        }).mount('#app');
+    </script>
+
+</body>
+</html>
