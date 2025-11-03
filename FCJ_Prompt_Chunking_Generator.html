@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Chunking Generator for AWS Blog Translation</title>
+    <style>
+        /* --- AWS Color Theme --- */
+        :root {
+            --aws-navy: #252F3E;
+            --aws-orange: #FF9900;
+            --aws-light-navy: #37475A;
+            --aws-lighter-navy: #495D7A;
+            --aws-orange-hover: #EC7211;
+            --aws-background: #EAEDED;
+            --aws-card-bg: #FFFFFF;
+        }
+
+        /* --- General Styling --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Amazon Ember', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--aws-background);
+            color: var(--aws-navy);
+        }
+
+        /* --- Loading Screen --- */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--aws-navy);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease-out;
+        }
+
+        .loading-screen.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-logo {
+            width: auto;
+            height: auto;
+            max-width: 520px;
+            margin-bottom: 30px;
+            animation: pulse 2s ease-in-out infinite;
+            object-fit: contain;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.05);
+                opacity: 0.8;
+            }
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 153, 0, 0.3);
+            border-top-color: var(--aws-orange);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: var(--aws-orange);
+            font-size: 18px;
+            margin-top: 20px;
+            font-weight: 500;
+        }
+
+        /* --- Header with Logo --- */
+        .header {
+            background: linear-gradient(135deg, var(--aws-navy) 0%, var(--aws-light-navy) 100%);
+            padding: 20px 40px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            animation: slideDown 0.6s ease-out forwards;
+            animation-delay: 0.3s;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .header-logo {
+            height: 70px;
+            width: auto;
+            max-width: 300px;
+            object-fit: contain;
+        }
+
+        .header-title {
+            flex: 1;
+        }
+
+        .header-title h1 {
+            color: white;
+            font-size: 28px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .header-title p {
+            color: var(--aws-orange);
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        /* --- Navigation Bar --- */
+        .nav-bar {
+            background-color: var(--aws-light-navy);
+            padding: 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            opacity: 0;
+            animation: slideDown 0.6s ease-out forwards;
+            animation-delay: 0.4s;
+        }
+
+        .nav-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            gap: 0;
+        }
+
+        .nav-link {
+            flex: 1;
+            padding: 15px 30px;
+            color: white;
+            text-decoration: none;
+            text-align: center;
+            font-weight: 500;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+            position: relative;
+        }
+
+        .nav-link:hover {
+            background-color: var(--aws-lighter-navy);
+            border-bottom-color: var(--aws-orange);
+        }
+
+        .nav-link.active {
+            background-color: var(--aws-navy);
+            border-bottom-color: var(--aws-orange);
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 0;
+            height: 3px;
+            background-color: var(--aws-orange);
+            transition: width 0.3s ease, left 0.3s ease;
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+            left: 0;
+        }
+
+        /* --- Main Container --- */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            opacity: 0;
+            animation: fadeInUp 0.8s ease-out forwards;
+            animation-delay: 0.5s;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* --- Blog Text Area Layout --- */
+        .blogs-wrapper {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .blog-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--aws-card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(37, 47, 62, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .blog-section:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(37, 47, 62, 0.15);
+        }
+        
+        .blog-section h2 {
+            text-align: center;
+            font-weight: 600;
+            color: var(--aws-navy);
+            margin-bottom: 15px;
+            font-size: 22px;
+            border-bottom: 3px solid var(--aws-orange);
+            padding-bottom: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 500px;
+            border: 2px solid #D5DBDB;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 15px;
+            line-height: 1.6;
+            resize: vertical;
+            background-color: #FAFAFA;
+            color: var(--aws-navy);
+            font-family: 'Courier New', monospace;
+            transition: border-color 0.3s ease, background-color 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--aws-orange);
+            background-color: white;
+            box-shadow: 0 0 0 3px rgba(255, 153, 0, 0.1);
+        }
+
+        textarea::placeholder {
+            color: #AAB7B8;
+        }
+
+        /* --- Button Styling --- */
+        .button-container {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        #submit-button {
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, #673ab7 0%, #512da8 100%);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(103, 58, 183, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #submit-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        #submit-button:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        #submit-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(103, 58, 183, 0.4);
+        }
+
+        #submit-button:active {
+            transform: translateY(0);
+        }
+
+        /* Container for dynamic "Get Prompt" buttons */
+        #prompt-buttons-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+            padding: 20px;
+            background: var(--aws-card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(37, 47, 62, 0.1);
+        }
+
+        /* Base style for prompt buttons */
+        .prompt-button-base {
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .prompt-button-base::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .prompt-button-base:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        /* Dynamic "Get Prompt - Part X" buttons */
+        .prompt-chunk-button {
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+        }
+
+        .prompt-chunk-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+        }
+        
+        /* "Get Full Prompt" button */
+        .prompt-full-button {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .prompt-full-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        /* 'Copied' state for ALL buttons */
+        .copied {
+            background: linear-gradient(135deg, #16A34A 0%, #15803D 100%) !important;
+        }
+
+        .button-text {
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* --- Responsive Design --- */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header-logo {
+                height: 50px;
+                max-width: 250px;
+            }
+
+            .header-title h1 {
+                font-size: 22px;
+            }
+
+            .nav-content {
+                flex-direction: column;
+            }
+
+            .nav-link {
+                border-bottom: 1px solid var(--aws-lighter-navy);
+            }
+
+            .blogs-wrapper {
+                flex-direction: column;
+            }
+
+            textarea {
+                height: 350px;
+            }
+
+            .container {
+                padding: 20px 15px;
+            }
+
+            #prompt-buttons-container {
+                padding: 15px;
+            }
+
+            .prompt-button-base {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loading-screen">
+        <img src="LOGO AWS FACJ - NO BG - 5.png" alt="AWS Logo" class="loading-logo" onerror="this.style.display='none'; document.getElementById('logo-placeholder').style.display='block';">
+        <div id="logo-placeholder" style="display: none; width: 300px; height: 150px; background: var(--aws-orange); border-radius: 12px; margin-bottom: 30px;"></div>
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading AWS Blog Translation Tool...</div>
+    </div>
+
+    <!-- Header with Logo -->
+    <header class="header">
+        <div class="header-content">
+            <img src="LOGO AWS FACJ - NO BG - 4.png" alt="AWS FCAJ Logo" class="header-logo" onerror="this.style.display='none'; document.getElementById('header-logo-placeholder').style.display='block';">
+            <div id="header-logo-placeholder" style="display: none; width: 200px; height: 70px; background: var(--aws-orange); border-radius: 8px;"></div>
+            <div class="header-title">
+                <h1>AWS Blog Translation Prompt Generator</h1>
+                <p>Professional Technical Content Localization Tool with Chunking Support</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Bar -->
+    <nav class="nav-bar">
+        <div class="nav-content">
+            <a href="FCJ_Prompt_Generator.html" class="nav-link">
+                📄 Standard Generator
+            </a>
+            <a href="FCJ_Prompt_Chunking_Generator.html" class="nav-link active">
+                ✂️ Chunking Generator
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container">
+        <div class="blogs-wrapper">
+            <div class="blog-section">
+                <h2>📄 Original Blog (English)</h2>
+                <textarea 
+                    id="original-blog" 
+                    placeholder="Paste the original English blog content here..."
+                ></textarea>
+            </div>
+            <div class="blog-section">
+                <h2>🌐 Translated Blog (Vietnamese)</h2>
+                <textarea 
+                    id="translated-blog" 
+                    placeholder="Paste the Vietnamese translated blog content here..."
+                ></textarea>
+            </div>
+        </div>
+        <div class="button-container">
+            <button id="submit-button">
+                <span class="button-text">Submit Context & Generate Chunks</span>
+            </button>
+        </div>
+
+        <div id="prompt-buttons-container"></div>
+    </div>
+
+    <script>
+        // Loading screen
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('loading-screen').classList.add('fade-out');
+            }, 2000);
+        });
+
+        // Get DOM elements
+        const originalBlogTextarea = document.getElementById('original-blog');
+        const translatedBlogTextarea = document.getElementById('translated-blog');
+        const submitButton = document.getElementById('submit-button');
+        const promptButtonsContainer = document.getElementById('prompt-buttons-container');
+
+        function getFullPrompt(originalContent, translatedContent, chunkNumber, totalChunks) {
+            return `
+[LƯU Ý QUAN TRỌNG DÀNH CHO AI]
+Đây là một prompt có cấu trúc. Nhiệm vụ của bạn là **THỰC THI** các hướng dẫn bên dưới (như [Role], [Objectives]) để hiệu đính văn bản trong [Context].
+**KHÔNG** phân tích, debug, hay chỉnh sửa cấu trúc của chính cái prompt này. Hãy nhập vai và làm theo yêu cầu.
+
+# [Role]
+Bạn là kiến trúc sư hệ thống với 20+ năm kinh nghiệm về cloud computing, hiện là chuyên gia tại AWS. Bạn có kinh nghiệm dịch cabin và chuyên hiệu đính các bài blog/kỹ thuật của AWS.
+
+# [Progress]
+Bạn đang xử lý **Phần ${chunkNumber} / ${totalChunks}**.
+${(chunkNumber === totalChunks) ? "**Lưu ý: Đây là phần CUỐI CÙNG (hoặc duy nhất) của tài liệu. Sau khi hoàn tất, hãy cân nhắc đưa ra nhận xét tổng thể.**" : ""}
+
+# [Personality]
+Khó tính, cầu toàn, soi kỹ từng từ/câu. Ưu tiên tính chính xác và tự nhiên trong tiếng Việt. Không bỏ sót lỗi nhỏ.
+
+# [Objectives]
+Bạn nhận **[Bài Gốc]** (EN) và **[Bài đã dịch]** (VI) trong **[Context]**. Hãy:
+1. **Rà soát tiêu đề thật kỹ** (ý nghĩa, phong cách, thuật ngữ) - (Chỉ thực hiện nếu đây là Phần 1).
+2. **Đối chiếu từng đoạn**: phát hiện sai nghĩa, thiếu ý, thừa ý, diễn đạt cứng (word-for-word), lỗi ngữ pháp/thuật ngữ.
+3. **Giữ nguyên tên dịch vụ/thuộc tính AWS** (không dịch, đúng chữ hoa/thương, đúng brand: *Amazon S3*, *AWS Lambda*, *EC2*, *VPC*, *Availability Zone*, v.v.).
+4. **Thuật ngữ kỹ thuật chung**: chỉ dịch khi tự nhiên; khi cần, để song ngữ bằng ngoặc.
+5. **Đề xuất bản sửa** dễ đọc cho người mới, nhưng **không làm sai nội dung kỹ thuật**.
+6. **Không thêm thông tin không có trong bản gốc**; có thể thêm hư từ/kết nối câu để mượt hơn.
+
+# [Context]
+
+## [Bài Gốc] (Phần ${chunkNumber}/${totalChunks})
+${originalContent}
+
+## [Bài đã dịch] (Phần ${chunkNumber}/${totalChunks})
+${translatedContent}
+
+# [Style Guide]
+* **Đối tượng**: người mới học CS hoặc ít kiến thức công nghệ.
+* **Giọng văn**: diễn giải, mạch lạc, gần gũi; tránh khẩu ngữ quá mức.
+* **Thuật ngữ**: giữ chuẩn ngành; không "Việt hoá" quá đà.
+* **Song ngữ khi cần**: *thuật ngữ (term)* ở **lần xuất hiện đầu** mỗi thuật ngữ quan trọng.
+  * Ví dụ: *endpoint → điểm cuối (endpoint)*
+  * *on-premises → tại chỗ (on-premises)*
+* **Giữ nguyên**: code blocks, tên API/SDK/CLI, tham số, JSON keys, tên màn hình Console, tên nút, output logs, câu lệnh shell, đường dẫn, URLs, region codes, dung lượng/đơn vị (GiB vs GB).
+* **Số & đơn vị**: không tự đổi (ms ↔ s, $ ↔ VND).
+* **Liên kết**: giữ link, dịch anchor text nếu là văn bản thuần.
+* **Dấu câu & chính tả**: tiếng Việt chuẩn, nhất quán cách viết hoa tên riêng.
+
+# [Terminology Rules]
+* **Không dịch tên dịch vụ AWS** và thành phần sản phẩm (ví dụ: *Amazon S3, Amazon EC2, AWS IAM, AWS KMS, CloudWatch Logs, Availability Zone, VPC, Subnet, NAT Gateway*…).
+* **Từ chung nên dịch (kèm EN khi cần)**:
+
+  * *endpoint → điểm cuối (endpoint)*
+  * *availability zone → vùng khả dụng (Availability Zone)*
+  * *fault tolerance → chịu lỗi (fault tolerance)*
+  * *throughput → thông lượng (throughput)*
+  * *latency → độ trễ (latency)*
+* **Nhất quán thuật ngữ trong toàn bài** (dùng cùng một cách dịch cho cùng một khái niệm).
+
+# [Quy trình thực hiện]
+1. **Tiền kiểm**: quét nhanh để lập danh sách thuật ngữ trọng yếu; đánh dấu chỗ có code/CLI/JSON để không sửa sai.
+2. **Kiểm tra tiêu đề**: (Chỉ làm ở Phần 1) đúng ý bài, đúng thuật ngữ, tự nhiên; tránh dịch word-for-word.
+3. **Đối chiếu từng đoạn**:
+
+   * So meaning (dịch có đủ ý? có sai lệch?)
+   * So terminology (chuẩn, nhất quán?)
+   * So fluency (tự nhiên, tránh dịch cứng?)
+   * So format (giữ code, tham số, link, bảng, bullet?)
+4. **Ghi lỗi** theo mẫu [Format] và **gợi ý chỉnh**.
+5. **Tóm tắt thay đổi chính** (tùy chọn) để người đọc nắm nhanh.
+
+# [Mức độ lỗi]
+* **Critical**: sai nghĩa/thiếu ý ảnh hưởng hiểu nhầm kỹ thuật.
+* **Major**: dùng thuật ngữ chưa chuẩn, diễn đạt gây khó hiểu cho người mới.
+* **Minor**: ngữ pháp, chính tả, dấu câu, mượt câu.
+
+# [Format] (đầu ra)
+**A. Báo cáo lỗi** — liệt kê theo thứ tự xuất hiện:
+* **Đoạn [Số đoạn, tên đoạn (nếu có), bắt đầu bằng: "…"]**
+
+  * **Bản dịch hiện tại**: …
+  * **Bản gốc (EN)**: …
+  * **Gợi ý chỉnh sửa**: …
+  * **Mức độ**: Critical/Major/Minor
+  * **Lý giải**: vì sao cần sửa (nghĩa/thuật ngữ/độ tự nhiên/định dạng…)
+
+**B. Bảng thuật ngữ (tùy chọn)**
+| Thuật ngữ EN      | Cách dùng trong bài               | Ghi chú                     |
+| ----------------- | --------------------------------- | --------------------------- |
+| Availability Zone | vùng khả dụng (Availability Zone) | Giữ EN khi cần độ chính xác |
+
+# [Tiêu chí kiểm tra tiêu đề]
+* Truyền tải đúng chủ đề/kết quả chính của bài.
+* Dùng đúng thuật ngữ ngành; tránh "dịch thẳng" gây gượng.
+* Ngắn gọn, dễ hiểu với người mới (≤ 85 ký tự nếu có thể).
+* Không dịch tên dịch vụ AWS trong tiêu đề.
+`;
+        }
+        
+        function splitBlogs(original, translated, charLimitEn = 3500) {
+            const originalLength = original.length;
+            const translatedLength = translated.length;
+
+            if (originalLength === 0 || translatedLength === 0) {
+                alert('Please fill in both text areas before generating prompts.');
+                return [];
+            }
+
+            const ratio = translatedLength / originalLength;
+
+            if (ratio < 0.5 || ratio > 2.0) {
+                console.warn(`Warning: Text length ratio is ${ratio.toFixed(2)}. Chunks may not align perfectly.`);
+            }
+
+            const numChunks = Math.ceil(originalLength / charLimitEn);
+            const chunks = [];
+
+            console.log(`Splitting into ${numChunks} chunks...`);
+
+            for (let i = 0; i < numChunks; i++) {
+                const originalStartIndex = i * charLimitEn;
+                const originalEndIndex = Math.min((i + 1) * charLimitEn, originalLength);
+                const originalChunk = original.substring(originalStartIndex, originalEndIndex);
+                
+                const translatedStartIndex = Math.floor(originalStartIndex * ratio);
+                const translatedEndIndex = (i === numChunks - 1) 
+                    ? translatedLength 
+                    : Math.floor(originalEndIndex * ratio);
+
+                const translatedChunk = translated.substring(translatedStartIndex, translatedEndIndex);
+
+                chunks.push({
+                    en: originalChunk,
+                    vi: translatedChunk
+                });
+            }
+
+            return chunks;
+        }
+
+        function copyPromptToClipboard(button, promptText) {
+            navigator.clipboard.writeText(promptText.trim()).then(() => {
+                const originalButtonText = button.innerHTML;
+                button.innerHTML = '<span class="button-text">✓ Copied to Clipboard!</span>';
+                button.classList.add('copied');
+                
+                setTimeout(() => {
+                    button.innerHTML = originalButtonText;
+                    button.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy content: ', err);
+                alert('An error occurred while copying the prompt!');
+            });
+        }
+
+        submitButton.addEventListener('click', () => {
+            promptButtonsContainer.innerHTML = '';
+            
+            const originalContent = originalBlogTextarea.value;
+            const translatedContent = translatedBlogTextarea.value;
+
+            if (!originalContent.trim() || !translatedContent.trim()) {
+                alert('Please fill in both text areas before generating prompts.');
+                return;
+            }
+
+            const blogChunks = splitBlogs(originalContent, translatedContent, 3500);
+            const totalChunks = blogChunks.length;
+
+            if (totalChunks === 0) return;
+
+            // Create chunk buttons
+            blogChunks.forEach((chunk, index) => {
+                const newButton = document.createElement('button');
+                const chunkNumber = index + 1;
+                
+                newButton.className = 'prompt-button-base prompt-chunk-button';
+                newButton.innerHTML = `<span class="button-text">📋 Get Prompt - Part ${chunkNumber}</span>`;
+                
+                newButton.addEventListener('click', () => {
+                    const fullPromptForChunk = getFullPrompt(chunk.en, chunk.vi, chunkNumber, totalChunks);
+                    copyPromptToClipboard(newButton, fullPromptForChunk);
+                });
+
+                promptButtonsContainer.appendChild(newButton);
+            });
+
+            // Create full prompt button
+            const fullButton = document.createElement('button');
+            fullButton.className = 'prompt-button-base prompt-full-button';
+            fullButton.innerHTML = '<span class="button-text">📄 Get Full Prompt (All Parts Combined)</span>';
+            
+            fullButton.addEventListener('click', () => {
+                const fullPrompt = getFullPrompt(originalContent, translatedContent, 1, 1);
+                copyPromptToClipboard(fullButton, fullPrompt);
+            });
+
+            promptButtonsContainer.appendChild(fullButton);
+        });
+    </script>
+
+</body>
+</html>
